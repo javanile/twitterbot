@@ -19,9 +19,6 @@ if(config.consumer_key == 'blah' ||
 // We need to include our configuration file
 var T = new Twit(require('./config.js'))
 
-// This is the URL of a search for the latest tweets on the #hashtag.
-var hastagSearch = { q: '#hashtag', count: 10, result_type: 'recent' }
-
 // A user stream
 var stream = T.stream('user')
 // When someone follows the user
@@ -73,6 +70,13 @@ function tweetEvent (tweet) {
 
 // This function finds the latest tweet with the #hashtag, and retweets it.
 function retweetLatest () {
+  // This is the URL of a search for the latest tweets on the #hashtag.
+  var hastagSearch = {
+    q: process.env.TWITTERBOT_QUERY,
+    count: 10,
+    result_type: 'recent'
+  }
+
   T.get('search/tweets', hastagSearch, function (error, data) {
     var tweets = data.statuses
     for (var i = 0; i < tweets.length; i++) {
@@ -101,6 +105,17 @@ function tweeted (err, reply) {
   } else {
     console.log('Tweeted: ' + reply)
   }
+}
+
+// Parse query
+function parseQuery(query) {
+  var parsedQuery = []
+  var fixedTokens = query.split(/\s*,\s*/g)
+  for (var i in fixedTokens) {
+    var shuffleTokens = fixedTokens[i].split(/\s*\|\s*/g)
+    parsedQuery.push(shuffleTokens[Math.floor(Math.random() * shuffleTokens.length)])
+  }
+  return parsedQuery.filter((elem, pos) => parsedQuery.indexOf(elem) == pos).join(' ')
 }
 
 // Try to retweet something as soon as we run the program...
