@@ -1,19 +1,20 @@
-// Debug flag
-
-var debug = false
-
 // Twitter library
 var Twit = require('twit')
 
-//Check config file is filled.
-var config = require('./config.js')
-if(config.consumer_key == 'blah' ||
-   config.consumer_secret == 'blah' ||
-   config.access_token == 'blah' ||
-   config.access_token_secret == 'blah'){
+// Debug flag
+var debug = false
 
-	console.log("You must fill your configuration file which is located /config.js");
-	return;
+//Check config file is filled.
+var config = {
+  consumer_key: process.env.TWITTERBOT_CONSUMER_KEY || 'blah',
+  consumer_secret: process.env.TWITTERBOT_CONSUMER_SECRET || 'blah',
+  access_token: process.env.TWITTERBOT_ACCESS_TOKEN || 'blah',
+  access_token_secret: process.env.TWITTERBOT_ACCESS_TOKEN_SECRET || 'blah'
+}
+
+if (config.consumer_key == 'blah' || config.consumer_secret == 'blah' || config.access_token == 'blah' || config.access_token_secret == 'blah') {
+	console.log("You must fill your environment variables")
+	return
 }
 
 // We need to include our configuration file
@@ -21,6 +22,7 @@ var T = new Twit(require('./config.js'))
 
 // A user stream
 var stream = T.stream('user')
+
 // When someone follows the user
 stream.on('follow', followed)
 stream.on('tweet', tweetEvent)
@@ -120,6 +122,7 @@ function parseQuery(query) {
 
 // Try to retweet something as soon as we run the program...
 retweetLatest()
+
 // ...and then every hour after that. Time here is in milliseconds, so
 // 1000 ms = 1 second, 1 sec * 60 = 1 min, 1 min * 60 = 1 hour --> 1000 * 60 * 60
-setInterval(retweetLatest, 1000 * 60 * 12)
+setInterval(retweetLatest, 1000 * 60 * (process.env.TWITTERBOT_RETWEET_INTERVAL || 15))
