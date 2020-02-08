@@ -72,11 +72,11 @@ function tweetEvent (tweet) {
 function retweetLatest () {
   // This is the URL of a search for the latest tweets on the #hashtag.
   var hastagSearch = {
-    q: process.env.TWITTERBOT_QUERY,
-    count: 10,
+    q: parseQuery(process.env.TWITTERBOT_QUERY),
+    count: 1,
     result_type: 'recent'
   }
-
+  console.log('Retweet lastet by query:', hastagSearch)
   T.get('search/tweets', hastagSearch, function (error, data) {
     var tweets = data.statuses
     for (var i = 0; i < tweets.length; i++) {
