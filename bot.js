@@ -1,27 +1,47 @@
-// Twitter library
+
+// Requirements
 var Twit = require('twit')
+var http = require('http')
+var username = process.env.TWITTERBOT_USERNAME
+var debug = process.env.TWITTERBOT_DEBUG || false
 
-// Debug flag
-var debug = false
-
-//Check config file is filled.
-var config = {
-  consumer_key: process.env.TWITTERBOT_CONSUMER_KEY || 'blah',
-  consumer_secret: process.env.TWITTERBOT_CONSUMER_SECRET || 'blah',
-  access_token: process.env.TWITTERBOT_ACCESS_TOKEN || 'blah',
-  access_token_secret: process.env.TWITTERBOT_ACCESS_TOKEN_SECRET || 'blah'
+// Audit and logs holder
+var audit = {
+  started: new Date().toISOString(),
+  username: username,
+  query: process.env.TWITTERBOT_QUERY,
+  logs: []
 }
 
-if (config.consumer_key == 'blah' || config.consumer_secret == 'blah' || config.access_token == 'blah' || config.access_token_secret == 'blah') {
-	console.log("You must fill your environment variables")
-	return
+// Create a web server for audit and log inspection:
+http.createServer(function (req, res) {
+  res.write(JSON.stringify(audit));
+  res.end();
+}).listen(3000);
+
+// Prepare Twit config keys
+var config = {
+  consumer_key: process.env.TWITTERBOT_CONSUMER_KEY,
+  consumer_secret: process.env.TWITTERBOT_CONSUMER_SECRET,
+  access_token: process.env.TWITTERBOT_ACCESS_TOKEN,
+  access_token_secret: process.env.TWITTERBOT_ACCESS_TOKEN_SECRET
+}
+
+// Check username.
+if (!username) {
+  return writeLog('FAIL', 'You must fill bot useraname')
+}
+
+// Check config values was filled.
+if (!config.consumer_key || !config.consumer_secret || !config.access_token || !config.access_token_secret) {
+  return writeLog('FAIL', 'You must fill your environment variables')
 }
 
 // We need to include our configuration file
-var T = new Twit(require('./config.js'))
+var T = new Twit(config)
 
 // A user stream
-var stream = T.stream('user')
+var stream = T.stream('statuses/filter', { track: '@' + username })
 
 // When someone follows the user
 stream.on('follow', followed)
@@ -32,40 +52,20 @@ function followed (event) {
   var name = event.source.name
   var screenName = event.source.screen_name
   var response = 'Thanks for following me, ' + name + ' @' + screenName
-  // Post that tweet!
   T.post('statuses/update', { status: response }, tweeted)
-
-  console.log('I was followed by: ' + name + ' @' + screenName)
+  writeLog.log('INFO', 'I was followed by: ' + name + ' @' + screenName)
 }
 
 // Here a tweet event is triggered!
 function tweetEvent (tweet) {
-  // If we wanted to write a file out
-  // to look more closely at the data
-  // var fs = require('fs')
-  // var json = JSON.stringify(tweet,null,2)
-  // fs.writeFile("tweet.json", json, output)
-
-  // Who is this in reply to?
   var reply_to = tweet.in_reply_to_screen_name
-  // Who sent the tweet?
   var name = tweet.user.screen_name
-  // What is the text?
   var txt = tweet.text
-
-  // Ok, if this was in reply to me
-  // Replace selftwitterhandle with your own twitter handle
-  console.log(reply_to, name, txt)
-  if (reply_to === 'selftwitterhandle') {
-
-    // Get rid of the @ mention
-    txt = txt.replace(/@selftwitterhandle/g, '')
-
-    // Start a reply back to the sender
+  writeLog('INFO', `Event: ${reply_to} ${name} ${txt}`)
+  if (reply_to === username) {
+    txt = txt.replace(new RegExp('@' + username, 'g'), '')
     var reply = 'Hi @' + name + ' ' + ', Thanks for the mention :)'
-
-    console.log(reply)
-    // Post that tweet!
+    writeLog('INFO', 'Replay to say thanks: ' + reply)
     T.post('statuses/update', { status: reply }, tweeted)
   }
 }
@@ -75,27 +75,19 @@ function retweetLatest () {
   // This is the URL of a search for the latest tweets on the #hashtag.
   var hastagSearch = {
     q: parseQuery(process.env.TWITTERBOT_QUERY),
-    count: 1,
+    count: parseInt(process.env.TWITTERBOT_RETWEET) || 1,
     result_type: 'recent'
   }
-  console.log('Retweet lastet by query:', hastagSearch)
+  writeLog('INFO', 'Retweet by: ' + JSON.stringify(hastagSearch))
   T.get('search/tweets', hastagSearch, function (error, data) {
+    if (error) {
+      return writeLog('FAIL', 'Retweet search fail:' + error.message)
+    }
     var tweets = data.statuses
     for (var i = 0; i < tweets.length; i++) {
-      console.log(tweets[i].text)
-    }
-    // If our search request to the server had no errors...
-    if (!error) {
-      // ...then we grab the ID of the tweet we want to retweet...
-      var retweetId = data.statuses[0].id_str
-      // ...and then we tell Twitter we want to retweet it!
+      writeLog('INFO', 'Retweet: ' + tweets[i].text.replace(/\w+/, ' ').trim())
+      var retweetId = tweets[i].id_str
       T.post('statuses/retweet/' + retweetId, {}, tweeted)
-    }
-    // However, if our original search request had an error, we want to print it out here.
-    else {
-      if (debug) {
-        console.log('There was an error with your hashtag search:', error)
-      }
     }
   })
 }
@@ -103,9 +95,9 @@ function retweetLatest () {
 // Make sure it worked!
 function tweeted (err, reply) {
   if (err !== undefined) {
-    console.log(err)
+    writeLog('FAIL', 'Tweet error: ' + err.message)
   } else {
-    console.log('Tweeted: ' + reply)
+    writeLog('INFO', 'Tweeted done: ' + JSON.stringify(reply))
   }
 }
 
@@ -118,6 +110,14 @@ function parseQuery(query) {
     parsedQuery.push(shuffleTokens[Math.floor(Math.random() * shuffleTokens.length)])
   }
   return parsedQuery.filter((elem, pos) => parsedQuery.indexOf(elem) == pos).join(' ')
+}
+
+// Write logs to audit
+function writeLog(type, message) {
+  var timestamp = new Date().toISOString()
+  console.log(`${timestamp} [${type}] ${message}`)
+  audit.logs.push({ type: type, timestamp: timestamp, message: message })
+  while (audit.logs.length > 100) audit.logs.shift();
 }
 
 // Try to retweet something as soon as we run the program...
