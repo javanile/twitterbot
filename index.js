@@ -98,7 +98,6 @@ function retweetLatest () {
 // Make sure it worked!
 function tweeted (err, reply) {
   if (err !== undefined) {
-    console.log("FAIL", reply)
     writeLog('FAIL', 'Tweet error: ' + err.message)
   } else {
     writeLog('INFO', 'Tweeted done: ID=' + reply.id_str)
