@@ -1,6 +1,6 @@
 
 // Requirements
-var Twit = require('twit')
+var twit = require('twit')
 var http = require('http')
 var username = process.env.TWITTERBOT_USERNAME
 var debug = process.env.TWITTERBOT_DEBUG || false
@@ -38,10 +38,10 @@ if (!config.consumer_key || !config.consumer_secret || !config.access_token || !
 }
 
 // We need to include our configuration file
-var T = new Twit(config)
+var twitter = new twit(config)
 
 // A user stream
-var stream = T.stream('statuses/filter', { track: '@' + username })
+var stream = twitter.stream('statuses/filter', { track: '@' + username })
 
 // When someone follows the user
 stream.on('follow', followed)
@@ -52,7 +52,7 @@ function followed (event) {
   var name = event.source.name
   var screenName = event.source.screen_name
   var response = 'Thanks for following me, ' + name + ' @' + screenName
-  T.post('statuses/update', { status: response }, tweeted)
+  twitter.post('statuses/update', { status: response }, tweeted)
   writeLog.log('INFO', 'I was followed by: ' + name + ' @' + screenName)
 }
 
@@ -66,28 +66,31 @@ function tweetEvent (tweet) {
     txt = txt.replace(new RegExp('@' + username, 'g'), '')
     var reply = 'Hi @' + name + ' ' + ', Thanks for the mention :)'
     writeLog('INFO', 'Replay to say thanks: ' + reply)
-    T.post('statuses/update', { status: reply }, tweeted)
+    twitter.post('statuses/update', { status: reply }, tweeted)
   }
 }
 
 // This function finds the latest tweet with the #hashtag, and retweets it.
 function retweetLatest () {
   // This is the URL of a search for the latest tweets on the #hashtag.
-  var hastagSearch = {
+  var search = {
     q: parseQuery(process.env.TWITTERBOT_QUERY),
     count: parseInt(process.env.TWITTERBOT_RETWEET) || 1,
     result_type: 'recent'
   }
-  writeLog('INFO', 'Retweet by: ' + JSON.stringify(hastagSearch))
-  T.get('search/tweets', hastagSearch, function (error, data) {
+  writeLog('INFO', `Retweet by: '${search.q}', count=${search.count}, result_type=${search.result_type}`)
+  twitter.get('search/tweets', search, function (error, data) {
     if (error) {
       return writeLog('FAIL', 'Retweet search fail:' + error.message)
     }
+    if (!data.statuses.length) {
+      return writeLog('FAIL', `Retweet nothig found with: '${search.q}'`)
+    }
     var tweets = data.statuses
     for (var i = 0; i < tweets.length; i++) {
-      writeLog('INFO', 'Retweet: ' + tweets[i].text.replace(/\w+/, ' ').trim())
+      writeLog('INFO', 'Retweet: ID=' + tweets[i].id_str + ' ' + tweets[i].text.replace(/\s+/g, ' ').trim())
       var retweetId = tweets[i].id_str
-      T.post('statuses/retweet/' + retweetId, {}, tweeted)
+      twitter.post('statuses/retweet/' + retweetId, {}, tweeted)
     }
   })
 }
@@ -95,9 +98,10 @@ function retweetLatest () {
 // Make sure it worked!
 function tweeted (err, reply) {
   if (err !== undefined) {
+    console.log("FAIL", reply)
     writeLog('FAIL', 'Tweet error: ' + err.message)
   } else {
-    writeLog('INFO', 'Tweeted done: ' + JSON.stringify(reply))
+    writeLog('INFO', 'Tweeted done: ID=' + reply.id_str)
   }
 }
 

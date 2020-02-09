@@ -1,18 +1,22 @@
 {
     "name": "bot",
     "version": "1.0.0",
+    "license": "Apache-2.0",
     "description": "Twitter Bot - NodeJS",
     "author": "Nishant Srivastava <nisrulz@gmail.com>",
+    "contributors": [
+        "Nishant Srivastava <nisrulz@gmail.com>",
+        "Francesco Bianco <bianco@javanile.org>"
+    ],
     "dependencies": {
         "twit": "*"
     },
     "scripts": {
-        "start": "node bot.js"
+        "start": "node index.js"
     },
     "repository": {
         "type": "git",
-        "url": "git://github.com/nisrulz/twitterbot-nodejs.git"
+        "url": "git://github.com/javanile/twitterbot.git"
     },
-    "analyze": true,
-    "license": "Apache-2.0"
+    "analyze": true
 }
