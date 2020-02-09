@@ -3,16 +3,24 @@
 var twit = require('twit')
 var http = require('http')
 var username = process.env.TWITTERBOT_USERNAME
-var query = process.env.TWITTERBOT_QUERY || ''
 var debug = process.env.TWITTERBOT_DEBUG || false
+
+//
+var retweetQuery = process.env.TWITTERBOT_RETWEET_QUERY || ''
 var retweetInterval = parseInt(process.env.TWITTERBOT_RETWEET_INTERVAL) || 15
+
+//
+var favoritesQuery = process.env.TWITTERBOT_FAVORITES_QUERY || ''
+var favoritesInterval = parseInt(process.env.TWITTERBOT_FAVORITES_INTERVAL) || 15
 
 // Audit and logs holder
 var audit = {
   started: new Date().toISOString(),
   username: username,
-  query: query,
+  retweet_query: retweetQuery,
   retweet_interval: retweetInterval,
+  favorites_query: favoritesQuery,
+  favorites_interval: favoritesInterval,
   logs: []
 }
 
@@ -55,7 +63,7 @@ stream.on('tweet', tweetEvent)
 function followed (event) {
   var name = event.source.name
   var screenName = event.source.screen_name
-  var response = 'Thanks for following me, ' + name + ' @' + screenName + '. See also ' + getHashTags(query)
+  var response = 'Thanks for following me, ' + name + ' @' + screenName + '. See also ' + getHashTags(retweetQuery)
   twitter.post('statuses/update', { status: response }, tweeted)
   writeLog.log('INFO', 'I was followed by: ' + name + ' @' + screenName)
 }
@@ -68,7 +76,7 @@ function tweetEvent (tweet) {
   writeLog('INFO', `Event: reply_to=${reply_to}, @${name} ${txt}`)
   if (reply_to === username) {
     txt = txt.replace(new RegExp('@' + username, 'g'), '')
-    var reply = 'Hi @' + name + ', Thanks for the mention. See also ' + getHashTags(query)
+    var reply = 'Hi @' + name + ', Thanks for the mention. See also ' + getHashTags(retweetQuery)
     writeLog('INFO', 'Reply to say thanks: ' + reply)
     twitter.post('statuses/update', { status: reply }, tweeted)
   }
@@ -78,7 +86,7 @@ function tweetEvent (tweet) {
 function retweetLatest () {
   // This is the URL of a search for the latest tweets on the #hashtag.
   var search = {
-    q: parseQuery(query),
+    q: parseQuery(retweetQuery),
     count: parseInt(process.env.TWITTERBOT_RETWEET) || 1,
     result_type: 'recent'
   }
@@ -98,6 +106,7 @@ function retweetLatest () {
       writeLog('INFO', 'Retweet: ID=' + tweets[i].id_str + ' ' + tweets[i].text.replace(/\s+/g, ' ').trim())
       var retweetId = tweets[i].id_str
       twitter.post('statuses/retweet/' + retweetId, {}, tweeted)
+      followUser(tweets[i].user.screen_name)
     }
   })
 }
@@ -109,6 +118,53 @@ function tweeted (err, reply) {
   } else {
     writeLog('INFO', 'Tweeted done: ID=' + reply.id_str)
   }
+}
+
+// This function finds the latest tweet with the #hashtag, and retweets it.
+function favoritesLatest () {
+  // This is the URL of a search for the latest tweets on the #hashtag.
+  var search = {
+    q: parseQuery(favoritesQuery),
+    count: parseInt(process.env.TWITTERBOT_FAVORITES) || 1,
+    result_type: 'recent'
+  }
+  writeLog('INFO', `Favorites by: '${search.q}', count=${search.count}, result_type=${search.result_type}`)
+  twitter.get('search/tweets', search, function (error, data) {
+    if (error) {
+      return writeLog('FAIL', 'Favorites search fail:' + error.message)
+    }
+    if (!data.statuses.length) {
+      return writeLog('FAIL', `Favorites missing topic: '${search.q}'`)
+    }
+    var tweets = data.statuses
+    for (var i = 0; i < tweets.length; i++) {
+      writeLog('INFO', 'Favorites: ID=' + tweets[i].id_str + ' ' + tweets[i].text.replace(/\s+/g, ' ').trim())
+      var favoritesId = tweets[i].id_str
+      twitter.post('favorites/create', { id: favoritesId }, favorited)
+      followUser(tweets[i].user.screen_name)
+    }
+  })
+}
+
+// Make sure it worked!
+function favorited (err, reply) {
+  if (err !== undefined) {
+    writeLog('FAIL', 'Favorites error: ' + err.message)
+  } else {
+    writeLog('INFO', 'Favorites done: ID=' + reply.id_str)
+  }
+}
+
+// Follow the user by screen name
+function followUser(screenName) {
+  twitter.post('friendships/create', { screen_name: screenName }, function(err, resp) {
+    if (err !== undefined) {
+      writeLog('FAIL', `Following user error for '${screenName}': ${err.message}`)
+    } else {
+      console.log(resp)
+      writeLog('INFO', `Followind user done for '${screenName}'`)
+    }
+  })
 }
 
 // Parse query
@@ -146,3 +202,9 @@ retweetLatest()
 
 // Repeat retweet by interval
 setInterval(retweetLatest, 1000 * 60 * retweetInterval)
+
+// Try to retweet something as soon as we run the program...
+favoritesLatest()
+
+// Repeat retweet by interval
+setInterval(favoritesLatest, 1000 * 60 * favoritesInterval)
