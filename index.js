@@ -3,13 +3,14 @@
 var twit = require('twit')
 var http = require('http')
 var username = process.env.TWITTERBOT_USERNAME
+var query = process.env.TWITTERBOT_QUERY || ''
 var debug = process.env.TWITTERBOT_DEBUG || false
 
 // Audit and logs holder
 var audit = {
   started: new Date().toISOString(),
   username: username,
-  query: process.env.TWITTERBOT_QUERY,
+  query: query,
   logs: []
 }
 
@@ -24,7 +25,8 @@ var config = {
   consumer_key: process.env.TWITTERBOT_CONSUMER_KEY,
   consumer_secret: process.env.TWITTERBOT_CONSUMER_SECRET,
   access_token: process.env.TWITTERBOT_ACCESS_TOKEN,
-  access_token_secret: process.env.TWITTERBOT_ACCESS_TOKEN_SECRET
+  access_token_secret: process.env.TWITTERBOT_ACCESS_TOKEN_SECRET,
+  timeout_ms: 300 * 1000
 }
 
 // Check username.
@@ -51,21 +53,21 @@ stream.on('tweet', tweetEvent)
 function followed (event) {
   var name = event.source.name
   var screenName = event.source.screen_name
-  var response = 'Thanks for following me, ' + name + ' @' + screenName
+  var response = 'Thanks for following me, ' + name + ' @' + screenName + '. See also ' + getHashTags(query)
   twitter.post('statuses/update', { status: response }, tweeted)
   writeLog.log('INFO', 'I was followed by: ' + name + ' @' + screenName)
 }
 
 // Here a tweet event is triggered!
 function tweetEvent (tweet) {
-  var reply_to = tweet.in_reply_to_screen_name
+  var reply_to = tweet.in_reply_to_screen_name || ''
   var name = tweet.user.screen_name
   var txt = tweet.text
-  writeLog('INFO', `Event: ${reply_to} ${name} ${txt}`)
+  writeLog('INFO', `Event: reply_to=${reply_to}, @${name} ${txt}`)
   if (reply_to === username) {
     txt = txt.replace(new RegExp('@' + username, 'g'), '')
-    var reply = 'Hi @' + name + ' ' + ', Thanks for the mention :)'
-    writeLog('INFO', 'Replay to say thanks: ' + reply)
+    var reply = 'Hi @' + name + ', Thanks for the mention. See also ' + getHashTags(query)
+    writeLog('INFO', 'Reply to say thanks: ' + reply)
     twitter.post('statuses/update', { status: reply }, tweeted)
   }
 }
@@ -74,7 +76,7 @@ function tweetEvent (tweet) {
 function retweetLatest () {
   // This is the URL of a search for the latest tweets on the #hashtag.
   var search = {
-    q: parseQuery(process.env.TWITTERBOT_QUERY),
+    q: parseQuery(query),
     count: parseInt(process.env.TWITTERBOT_RETWEET) || 1,
     result_type: 'recent'
   }
@@ -84,7 +86,10 @@ function retweetLatest () {
       return writeLog('FAIL', 'Retweet search fail:' + error.message)
     }
     if (!data.statuses.length) {
-      return writeLog('FAIL', `Retweet nothig found with: '${search.q}'`)
+      writeLog('FAIL', `Retweet missing topic: '${search.q}'`)
+      var link = 'https://twitter.com/search?q=' + encodeURIComponent(search.q) + '&f=live'
+      var response = `Missing topic ${search.q} visit ${link}`
+      return twitter.post('statuses/update', { status: response }, tweeted)
     }
     var tweets = data.statuses
     for (var i = 0; i < tweets.length; i++) {
@@ -121,6 +126,17 @@ function writeLog(type, message) {
   console.log(`${timestamp} [${type}] ${message}`)
   audit.logs.push({ type: type, timestamp: timestamp, message: message })
   while (audit.logs.length > 100) audit.logs.shift();
+}
+
+// Get all hashtag into string
+function getHashTags(inputText) {
+  var regex = /(?:^|\s)(?:#)([a-zA-Z\d]+)/gm;
+  var matches = [];
+  var match;
+  while ((match = regex.exec(inputText))) {
+    matches.push('#' + match[1]);
+  }
+  return matches.join(' ');
 }
 
 // Try to retweet something as soon as we run the program...
