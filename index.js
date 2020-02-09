@@ -5,12 +5,14 @@ var http = require('http')
 var username = process.env.TWITTERBOT_USERNAME
 var query = process.env.TWITTERBOT_QUERY || ''
 var debug = process.env.TWITTERBOT_DEBUG || false
+var retweetInterval = parseInt(process.env.TWITTERBOT_RETWEET_INTERVAL) || 15
 
 // Audit and logs holder
 var audit = {
   started: new Date().toISOString(),
   username: username,
   query: query,
+  retweet_interval: retweetInterval,
   logs: []
 }
 
@@ -142,6 +144,5 @@ function getHashTags(inputText) {
 // Try to retweet something as soon as we run the program...
 retweetLatest()
 
-// ...and then every hour after that. Time here is in milliseconds, so
-// 1000 ms = 1 second, 1 sec * 60 = 1 min, 1 min * 60 = 1 hour --> 1000 * 60 * 60
-setInterval(retweetLatest, 1000 * 60 * (praseInt(process.env.TWITTERBOT_RETWEET_INTERVAL) || 15))
+// Repeat retweet by interval
+setInterval(retweetLatest, 1000 * 60 * retweetInterval)
