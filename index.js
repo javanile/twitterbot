@@ -165,7 +165,6 @@ function followUser(screenName) {
     if (err !== undefined) {
       writeLog('FAIL', `Follow user error for '${screenName}': ${err.message}`)
     } else {
-      console.log(resp)
       writeLog('INFO', `Follow user done for '${screenName}'`)
     }
   })
