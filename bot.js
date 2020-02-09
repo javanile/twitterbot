@@ -17,7 +17,7 @@ var audit = {
 http.createServer(function (req, res) {
   res.write(JSON.stringify(audit));
   res.end();
-}).listen(3000);
+}).listen(process.env.PORT || 3000);
 
 // Prepare Twit config keys
 var config = {
