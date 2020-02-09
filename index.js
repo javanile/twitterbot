@@ -3,6 +3,7 @@
 var twit = require('twit')
 var http = require('http')
 var username = process.env.TWITTERBOT_USERNAME
+var language = process.env.TWITTERBOT_LANGUAGE
 var debug = process.env.TWITTERBOT_DEBUG || false
 
 //
@@ -17,6 +18,7 @@ var favoritesInterval = parseInt(process.env.TWITTERBOT_FAVORITES_INTERVAL) || 1
 var audit = {
   started: new Date().toISOString(),
   username: username,
+  language: language,
   retweet_query: retweetQuery,
   retweet_interval: retweetInterval,
   favorites_query: favoritesQuery,
@@ -90,6 +92,7 @@ function retweetLatest () {
     count: parseInt(process.env.TWITTERBOT_RETWEET) || 1,
     result_type: 'recent'
   }
+  if (language) { search.lang = language; }
   writeLog('INFO', `Retweet by: '${search.q}', count=${search.count}, result_type=${search.result_type}`)
   twitter.get('search/tweets', search, function (error, data) {
     if (error) {
@@ -128,6 +131,7 @@ function favoritesLatest () {
     count: parseInt(process.env.TWITTERBOT_FAVORITES) || 1,
     result_type: 'recent'
   }
+  if (language) { search.lang = language; }
   writeLog('INFO', `Favorites by: '${search.q}', count=${search.count}, result_type=${search.result_type}`)
   twitter.get('search/tweets', search, function (error, data) {
     if (error) {
@@ -159,10 +163,10 @@ function favorited (err, reply) {
 function followUser(screenName) {
   twitter.post('friendships/create', { screen_name: screenName }, function(err, resp) {
     if (err !== undefined) {
-      writeLog('FAIL', `Following user error for '${screenName}': ${err.message}`)
+      writeLog('FAIL', `Follow user error for '${screenName}': ${err.message}`)
     } else {
       console.log(resp)
-      writeLog('INFO', `Followind user done for '${screenName}'`)
+      writeLog('INFO', `Follow user done for '${screenName}'`)
     }
   })
 }
